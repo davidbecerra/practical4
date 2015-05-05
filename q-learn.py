@@ -10,24 +10,31 @@ class Learner:
         self.last_action = None
         self.last_reward = None
         # state indexing in order: tree top, tree dist, monkey top, monkey vel, action
-        self.Q = [[[[[0]*2]*12]*9]*6]*4
-        self.a = [[[[[1]*2]*12]*9]*6]*4
+        self.Q = [[[[[0.0]*2]*12]*9]*6]*4
+        self.a = [[[[[1.0]*2]*12]*9]*6]*4 # learning factor for each (state, action) pair -> same size as Q
+
+        self.discount = 1.0
 
     def reset(self):
         self.last_state  = None
         self.last_action = None
         self.last_reward = None
 
-    def state_tupler(state):
-        # state indexing in order: tree top, tree dist, monkey top, monkey vel, action
-        bin_state = (0,0,0,0)
+    def state_tupler(self, state):
+        '''
+        Input: takes full state they provide
+        Return: tuple representation of the state
+            bin_state = [tree top bin, tree dist bin, monkey top bin, monkey vel bin]
+        '''
+        # state indexing in order: tree top, tree dist, monkey top, monkey vel
+        bin_state = [0,0,0,0]
         bin_state[0] = (state['tree']['top'] - 200) // 50
         tree_dist = state['tree']['dist']
 
         if tree_dist < 0:
-            bin_state[1] = 0:
+            bin_state[1] = 0
         elif tree_dist < 50:
-            bin_state[1] = 1:
+            bin_state[1] = 1
         elif tree_dist < 100:
             bin_state[1] = 2
         elif tree_dist < 200:
@@ -55,6 +62,23 @@ class Learner:
 
         return bin_state
 
+    def update_Q(self, new_state):
+        s = self.state_tupler(self.last_state)
+        s_prime = self.state_tupler(new_state)
+        alpha = 1.0 / self.a[s[0]][s[1]][s[2]][s[3]][self.last_action]
+        old_Q = self.Q[s[0]][s[1]][s[2]][s[3]][self.last_action]
+        max_Q = max(self.Q[s_prime[0]][s_prime[1]][s_prime[2]][s_prime[3]])
+        self.Q[s[0]][s[1]][s[2]][s[3]][self.last_action] = (old_Q +
+                        alpha * (self.last_reward + self.discount*max_Q - old_Q))
+
+    def update_a(self):
+        s = self.state_tupler(self.last_state)
+        self.a[s[0]][s[1]][s[2]][s[3]][self.last_action] += 1.0
+
+    def optimal_action(self, state):
+        s = self.state_tupler(state)
+        return self.Q[s[0]][s[1]][s[2]][s[3]].index(max(self.Q[s[0]][s[1]][s[2]][s[3]]))
+
     def action_callback(self, state):
         '''Implement this function to learn things and take actions.
         Return 0 if you don't want to jump and 1 if you do.'''
@@ -71,19 +95,25 @@ class Learner:
         # monkey between 450 and -50
         # monkey vel between -50 and 40
 
-        epsilon = ii
-
-        if self.last_action = None:
-            self.last_action = npr.rand() < 0.5
-
-        else:
-
+        epsilon = 1.0 / (ii+1.0)
         new_state  = state
+
+        # First turn of game -> just pick a random action
+        if self.last_action == None:
+            new_action = npr.rand() < 0.5
+        # Update Q and a, then pick new action
+        else: 
+            self.update_Q(state)
+            self.update_a()
+            new_action = self.optimal_action(state)
+            # Explore (take non-optimal action) with probability epsilon
+            if npr.rand() < epsilon:
+                new_action = int(not new_action)
 
         self.last_action = new_action
         self.last_state  = new_state
 
-        return self.last_action
+        return new_action
 
     def reward_callback(self, reward):
         '''This gets called so you can see what reward you get.'''
@@ -98,7 +128,7 @@ for ii in xrange(iters):
     # Make a new monkey object.
     swing = SwingyMonkey(sound=False,            # Don't play sounds.
                          text="Epoch %d" % (ii), # Display the epoch on screen.
-                         tick_length=100,          # Make game ticks super fast.
+                         tick_length=1,          # Make game ticks super fast.
                          action_callback=learner.action_callback,
                          reward_callback=learner.reward_callback)
 
