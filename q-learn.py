@@ -11,6 +11,7 @@ class Learner:
         self.last_reward = None
         # state indexing in order: tree top, tree dist, monkey top, monkey vel, action
         self.Q = [[[[[0]*2]*12]*9]*6]*4
+        self.a = [[[[[1]*2]*12]*9]*6]*4
 
     def reset(self):
         self.last_state  = None
@@ -69,7 +70,14 @@ class Learner:
         # monkey 56 pixels tall
         # monkey between 450 and -50
         # monkey vel between -50 and 40
-        new_action = npr.rand() < 0.1
+
+        epsilon = ii
+
+        if self.last_action = None:
+            self.last_action = npr.rand() < 0.5
+
+        else:
+
         new_state  = state
 
         self.last_action = new_action
