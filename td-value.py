@@ -12,11 +12,15 @@ class Learner:
         self.last_action = None
         self.last_reward = None
         # state indexing in order: tree top, tree dist, monkey top, monkey vel, action
-        self.Q = {}
-        self.a = {}
+        # TD-learning
+        self.N_sa = {} # state hash -> [a0, a1]
+        self.N_sas = {} # state hash -> state' hash -> [a0, a1]
+        self.R = {} # state hash -> [a0, a1]
+        self.V = {} # state hash -> int
+        self.a = {} # state hash -> [a0, a1]
 
         # discount used in Q-learning
-        self.discount = 1.0
+        self.discount = 0.5
 
     def reset(self):
         self.last_state  = None
@@ -69,28 +73,50 @@ class Learner:
         a, b, c, d = self.state_tupler(state)
         return int(str(a*1000000)+str(b*10000)+str(c*100)+str(d))
 
-    def update_Q(self, new_state):
+    def update_V(self, new_state):
         s = self.state_hash(self.last_state)
         s_prime = self.state_hash(new_state)
         if s not in self.a:
             self.a[s] = np.array([1.0,1.0])
         alpha = 1.0 / self.a[s][self.last_action]
-        if s not in self.Q:
-            self.Q[s] = np.array([0.0, 0.0])
-        old_Q = self.Q[s][self.last_action]
-        if s_prime not in self.Q:
-            self.Q[s_prime] = np.array([0.0, 0.0])
-        max_Q = max(self.Q[s_prime])
-        self.Q[s][self.last_action] = (old_Q +
-            alpha * (self.last_reward + self.discount*max_Q - old_Q))
+        if s not in self.V:
+            self.V[s] = 0.0
+        if s_prime not in self.V:
+            self.V[s_prime] = 0.0
+        self.V[s] = self.V[s] + alpha*(self.last_reward + self.discount*self.V[s_prime] - self.V[s])
 
     def update_a(self):
         s = self.state_hash(self.last_state)
         self.a[s][self.last_action] += 1.0
 
+    def update_transition_model(self, state):
+        s = self.state_hash(self.last_state)
+        if s not in self.N_sa:
+            self.N_sa[s] = np.array([0.0, 0.0])
+        self.N_sa[s][self.last_action] += 1.0
+
+        s_prime = self.state_hash(state)
+        if s not in self.N_sas:
+            self.N_sas[s] = {}
+        if s_prime not in self.N_sas[s]:
+            self.N_sas[s][s_prime] = np.array([0.0, 0.0])
+        self.N_sas[s][s_prime][self.last_action] += 1.0
+
     def optimal_action(self, state):
         s = self.state_hash(state)
-        return np.argmax(self.Q[s])
+        policy = []
+        for action in [0,1]:
+            if s not in self.R:
+                expected_R = 0
+            else:
+                expected_R = self.R[s][action] / self.N_sa[s][action]
+            expected_V = 0.0
+            if s in self.N_sas:
+                for s_prime in self.N_sas[s]:
+                    P = self.N_sas[s][s_prime][action] / self.N_sa[s][action]
+                    expected_V += P * self.V[s_prime]
+            policy.append(expected_R + expected_V)
+        return np.argmax(policy)
 
     def action_callback(self, state):
         '''Implement this function to learn things and take actions.
@@ -115,7 +141,8 @@ class Learner:
             new_action = npr.rand() < 0.5
         # Update Q and a, then pick new action
         else: 
-            self.update_Q(state)
+            self.update_transition_model(state)
+            self.update_V(state)
             self.update_a()
             new_action = self.optimal_action(state)
             # Explore (take non-optimal action) with probability epsilon
@@ -131,6 +158,11 @@ class Learner:
         '''This gets called so you can see what reward you get.'''
 
         self.last_reward = reward
+        if self.last_state != None:
+            s = self.state_hash(self.last_state)
+            if s not in self.R:
+                self.R[s] = np.array([0.0, 0.0])
+            self.R[s][self.last_action] += reward
 
 iters = 300
 learner = Learner()
@@ -156,7 +188,10 @@ for ii in xrange(iters):
 
 domain = np.arange(1, iters + 1, 1)
 plt.plot(domain, scores)
+# plt.bar(domain, scores)
 plt.xlabel("Epoch")
 plt.ylabel("Score")
 plt.savefig("scores.png")
 plt.show()
+
+    
