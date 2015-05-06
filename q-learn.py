@@ -156,7 +156,8 @@ for ii in xrange(iters):
 
 domain = np.arange(1, iters + 1, 1)
 plt.plot(domain, scores)
+plt.title("Scores over each Epoch (discount = " + str(learner.discount) + ")")
 plt.xlabel("Epoch")
 plt.ylabel("Score")
-plt.savefig("scores.png")
+plt.savefig("q_scores.png")
 plt.show()
