@@ -73,7 +73,6 @@ class Learner:
         max_Q = max(self.Q[s_prime[0]][s_prime[1]][s_prime[2]][s_prime[3]])
         self.Q[s[0]][s[1]][s[2]][s[3]][self.last_action] = (old_Q +
             alpha * (self.last_reward + self.discount*max_Q - old_Q))
-        print self.Q
 
     def update_a(self):
         s = self.state_tupler(self.last_state)
@@ -81,7 +80,7 @@ class Learner:
 
     def optimal_action(self, state):
         s = self.state_tupler(state)
-        return self.Q[s[0]][s[1]][s[2]][s[3]].index(max(self.Q[s[0]][s[1]][s[2]][s[3]]))
+        return np.argmax(self.Q[s[0]][s[1]][s[2]][s[3]])
 
     def action_callback(self, state):
         '''Implement this function to learn things and take actions.
@@ -131,7 +130,7 @@ for ii in xrange(iters):
     # Make a new monkey object.
     swing = SwingyMonkey(sound=False,            # Don't play sounds.
                          text="Epoch %d" % (ii), # Display the epoch on screen.
-                         tick_length=100,          # Make game ticks super fast.
+                         tick_length=10,          # Make game ticks super fast.
                          action_callback=learner.action_callback,
                          reward_callback=learner.reward_callback)
 
