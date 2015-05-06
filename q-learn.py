@@ -3,6 +3,7 @@ import numpy as np
 import numpy.random as npr
 import sys
 from SwingyMonkey import SwingyMonkey
+import matplotlib.pyplot as plt
 
 class Learner:
 
@@ -124,13 +125,14 @@ class Learner:
 
 iters = 300
 learner = Learner()
+scores = []
 
 for ii in xrange(iters):
 
     # Make a new monkey object.
     swing = SwingyMonkey(sound=False,            # Don't play sounds.
                          text="Epoch %d" % (ii), # Display the epoch on screen.
-                         tick_length=10,          # Make game ticks super fast.
+                         tick_length=1,          # Make game ticks super fast.
                          action_callback=learner.action_callback,
                          reward_callback=learner.reward_callback)
 
@@ -138,9 +140,14 @@ for ii in xrange(iters):
     while swing.game_loop():
         pass
 
+    scores.append(swing.get_score())
+
     # Reset the state of the learner.
     learner.reset()
 
-
+domain = np.arange(1, iters + 1, 1)
+plt.plot(domain, scores)
+plt.savefig("scores.png")
+plt.show()
 
     

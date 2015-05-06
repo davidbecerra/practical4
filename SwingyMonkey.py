@@ -256,6 +256,9 @@ class SwingyMonkey:
 
         return True
 
+    def get_score(self):
+        return self.score
+
 if __name__ == '__main__':
     
     # Create the game object.
