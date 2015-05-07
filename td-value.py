@@ -7,20 +7,19 @@ import matplotlib.pyplot as plt
 
 class Learner:
 
-  def __init__(self):
+  def __init__(self, epsilon_factor = 10.0):
     self.last_state  = None
     self.last_action = None
     self.last_reward = None
-    # state indexing in order: tree top, tree dist, monkey top, monkey vel, action
     # TD-learning
     self.N_sa = {} # state hash -> [a0, a1]
     self.N_sas = {} # state hash -> state' hash -> [a0, a1]
     self.R = {} # state hash -> [a0, a1]
     self.V = {} # state hash -> int
-    self.a = {} # state hash -> [a0, a1]
+    # discount used in V update
+    self.discount = 0.0
 
-    # discount used in Q-learning
-    self.discount = 0.5
+    self.epsilon_factor = epsilon_factor
 
   def reset(self):
     self.last_state  = None
@@ -35,87 +34,87 @@ class Learner:
     '''
     # state indexing in order: tree top, tree dist, monkey top, monkey vel
     bin_state = [0,0,0,0]
-    bin_state[0] = (state['tree']['top'] - 200) // 50
-    tree_dist = state['tree']['dist']
+    bin_state[0] = (state['tree']['top'] - 200) // 25
 
+    tree_dist = state['tree']['dist']
     if tree_dist < 0:
       bin_state[1] = 0
-    elif tree_dist < 50:
-      bin_state[1] = 1
-    elif tree_dist < 100:
-      bin_state[1] = 2
-    elif tree_dist < 200:
-      bin_state[1] = 3
     elif tree_dist < 300:
-      bin_state[1] = 4
+      bin_state[1] = (tree_dist // 75) + 1
     else:
       bin_state[1] = 5
 
     monkey_top = state['monkey']['top']
-    if monkey_top <= 56:
-        bin_state[2] = 0
-    elif not monkey_top >= 400:
-        bin_state[2] = monkey_top // 50
+    if monkey_top < 125:
+      bin_state[2] = 0
+    elif monkey_top < 350:
+      bin_state[2] = ((monkey_top - 125) // 25) + 1 
     else:
-         bin_state[2] = 8
+      bin_state[2] = 10
 
     monkey_vel = state['monkey']['vel']
-    if monkey_vel < -25:
-        bin_state[3] = 0
-    elif not monkey_vel >= 25:
-        bin_state[3] = (monkey_vel + 30) // 5
+    if monkey_vel < 0:
+      bin_state[3] = 0
+    elif monkey_vel < 5:
+      bin_state[3] = 1
     else:
-        bin_state[3] = 11
+      bin_state[3] = 2
 
     return bin_state
 
   def state_hash(self, state):
     a, b, c, d = self.state_tupler(state)
-    return int(str(a*1000000)+str(b*10000)+str(c*100)+str(d))
+    return int((a*1000000)+(b*10000)+(c*100)+(d))
 
   def update_V(self, new_state):
     s = self.state_hash(self.last_state)
     s_prime = self.state_hash(new_state)
-    if s not in self.a:
-      self.a[s] = np.array([1.0,1.0])
-    alpha = 1.0 / self.a[s][self.last_action]
+    alpha = 1.0 / self.N_sa[s][self.last_action]
     if s not in self.V:
       self.V[s] = 0.0
     if s_prime not in self.V:
       self.V[s_prime] = 0.0
-    self.V[s] = self.V[s] + alpha*(self.last_reward + self.discount*self.V[s_prime] - self.V[s])
+    self.V[s] = self.V[s] + alpha*(self.last_reward 
+                      + self.discount*self.V[s_prime] - self.V[s])
 
-  def update_a(self):
+  def update_N(self, state):
+    ''' Updates N(s,a) matrix and N(s,a,s') where s' = state, s = last_state and
+    a = last_acion '''
     s = self.state_hash(self.last_state)
-    self.a[s][self.last_action] += 1.0
-
-  def update_transition_model(self, state):
-    s = self.state_hash(self.last_state)
+    s_prime = self.state_hash(state)
     if s not in self.N_sa:
       self.N_sa[s] = np.array([0.0, 0.0])
-    self.N_sa[s][self.last_action] += 1.0
-
-    s_prime = self.state_hash(state)
     if s not in self.N_sas:
       self.N_sas[s] = {}
     if s_prime not in self.N_sas[s]:
       self.N_sas[s][s_prime] = np.array([0.0, 0.0])
+    self.N_sa[s][self.last_action] += 1.0
     self.N_sas[s][s_prime][self.last_action] += 1.0
 
   def optimal_action(self, state):
+    '''
+    Determines the optimal action to take in 'state' based on current model:
+      pi(s) = argmax_a[ R(s,a) + sum_s'{ P(s'| s,a) * V(s') } ]
+    Input: state: current state monkey is in. 
+    Output: Action (0,1) based on above equation
+    '''
     s = self.state_hash(state)
+    # First time in state: R(s,a) = 0, N(s,a) = 0, P(s'|s,a) = 0. Pick rand action
+    if s not in self.N_sa:
+      return npr.rand() < 0.1
     policy = []
     for action in [0,1]:
-      if s not in self.R:
-        expected_R = 0
-      else:
-        expected_R = self.R[s][action] / self.N_sa[s][action]
+      # Never done action in s: R(s,a) = 0, N(s,a,s') = 0, P(s'|s,a) = 0
+      if self.N_sa[s][action] == 0.0:
+        policy.append(0.0)
+        continue
+      expected_R = self.R[s][action] / self.N_sa[s][action]
       expected_V = 0.0
-      if s in self.N_sas:
-        for s_prime in self.N_sas[s]:
-          P =self.N_sas[s][s_prime][action] / self.N_sa[s][action]
-          expected_V += P * self.V[s_prime]
+      for s_prime in self.N_sas[s]:
+        P = self.N_sas[s][s_prime][action] / self.N_sa[s][action]
+        expected_V += P * self.V[s_prime]
       policy.append(expected_R + expected_V)
+
     return np.argmax(policy)
 
   def action_callback(self, state):
@@ -126,53 +125,44 @@ class Learner:
     # You'll need to take an action, too, and return it.
     # Return 0 to swing and 1 to jump.
 
-    # tree dist ranges from 400 to negatives
-    # tree top ranges from 400 to 200
-    # tree bot ranges from 200 to 0
-    # gap always 200 pixels
-    # monkey 56 pixels tall
-    # monkey between 450 and -50
-    # monkey vel between -50 and 40
+    epsilon = 1.0 / ((ii + 1.0) * self.epsilon_factor)
 
-    # epsilon = 1.0 / (10.0 * (ii+1.0))
+    # First turn of game -> pick a random action
+    if self.last_action == None:
+      if ii == 0.0:
+        new_action = npr.rand() < 0.5
+      # Use model when it exists (not on first epoch)
+      else: 
+        new_action = self.optimal_action(state)
+    # Update V and N, then pick new action
+    else: 
+      self.update_N(state)
+      self.update_V(state)
+      new_action = self.optimal_action(state)
 
-    # # First turn of game -> just pick a random action
-    # if self.last_action == None:
-    #     new_action = npr.rand() < 0.5
-    # # Update Q and a, then pick new action
-    # else: 
-    #     self.update_transition_model(state)
-    #     self.update_V(state)
-    #     self.update_a()
-    #     new_action = self.optimal_action(state)
-    #     # Explore (take non-optimal action) with probability epsilon
-    #     if npr.rand() < epsilon:
-    #         new_action = int(not new_action)
-
-    # self.last_action = new_action
-    # self.last_state  = state
-
-    # return new_action
-    new_action = npr.rand() < 0.1
-    new_state  = state
+    # Explore (take non-optimal action) with probability epsilon
+    if npr.rand() < epsilon:
+      new_action = int(not new_action)
 
     self.last_action = new_action
-    self.last_state  = new_state
+    self.last_state  = state
 
-    return self.last_action
+    return new_action
 
 
   def reward_callback(self, reward):
     '''This gets called so you can see what reward you get.'''
 
     self.last_reward = reward
+
+    # Update reward
     if self.last_state != None:
       s = self.state_hash(self.last_state)
       if s not in self.R:
         self.R[s] = np.array([0.0, 0.0])
       self.R[s][self.last_action] += reward
 
-iters = 1
+iters = 300
 learner = Learner()
 scores = []
 
@@ -194,11 +184,9 @@ for ii in xrange(iters):
   # Reset the state of the learner.
   learner.reset()
 
-print learner.R
-
+# Display plot of scores
 domain = np.arange(1, iters + 1, 1)
 plt.plot(domain, scores)
-# plt.bar(domain, scores)
 plt.title("Scores over each Epoch (discount = " + str(learner.discount) + ")")
 plt.xlabel("Epoch")
 plt.ylabel("Score")
