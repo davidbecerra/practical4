@@ -1,15 +1,16 @@
-## Changes
+# Practical 4: Reinforcement Learning 
+#### David Becerra, Conrad Shock, Wentao Xu
 
-Changed how Q and a are stored. Now representing them as a dictionary. The keys are hash values for each state 'tuple'. Essentially I call state_tupler from a function called state_hash. Then, state_hash takes the return value of state_tupler and converts it into a hash. Therefore, each state has a unique has obtained by simply calling state_hash(state).
+### Files
 
-Began implementing TD-value learning which is a hybrid model-based and model-free method (it's mentioned in the course notes). However, right now it doesn't seem to be working.
+* q-learn.py : Implementation of Q-learn with initial/original discretization.
 
-### Images
+* q-learn-new-disc.py: Implementation of Q-learn with refined discretization (best learner algorithm).
 
-* scores.png - the default output when running program. Has whatever was run last.
+* td-value.py : Implementation of td-value with refined discretization.
 
-* scores1.png - First successful run of q-learn. Q and a represented as multi-dimensional np.arrays. Discount value is 1.0. 
+### Usage
+To run the desired file (q-learn.py, q-learn-new-disc.py, or td-value.py) type the following command in a terminal:
+`python <file-name>`
 
-* scores2.png - Same as scores1.png except axes are labeled
-
-* dictionaryuse.png - the result of changing the base q-learn code from using np.arrays for Q and a to dictionary. Clearly, using dictionaries did not break the code 
+The command will open the game GUI, and the learner will start to play the game. All the learners run for 300 epochs except for q-learn-new-disc.py with runs for 150 epochs. When the learners complete, a plot of the scores over all the epochs is displayed. To close the program, exit out of the final plot, or exit out of the GUI while it is still running. 
