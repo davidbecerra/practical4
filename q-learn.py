@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 class Learner:
 
-    def __init__(self):
+    def __init__(self, epsilon_factor = 10.0):
         self.last_state  = None
         self.last_action = None
         self.last_reward = None
@@ -17,6 +17,8 @@ class Learner:
 
         # discount used in Q-learning
         self.discount = 1.0
+
+        self.epsilon_factor = epsilon_factor
 
     def reset(self):
         self.last_state  = None
@@ -67,7 +69,7 @@ class Learner:
 
     def state_hash(self, state):
         a, b, c, d = self.state_tupler(state)
-        return int(str(a*1000000)+str(b*10000)+str(c*100)+str(d))
+        return int((a*1000000)+(b*10000)+(c*100)+(d))
 
     def update_Q(self, new_state):
         s = self.state_hash(self.last_state)
@@ -108,19 +110,24 @@ class Learner:
         # monkey between 450 and -50
         # monkey vel between -50 and 40
 
-        epsilon = 1.0 / (10.0 * (ii+1.0))
+        epsilon = 1.0 / (self.epsilon_factor * (ii+1.0))
 
-        # First turn of game -> just pick a random action
+        # First turn of game -> pick a random action
         if self.last_action == None:
+          if ii == 0.0 or self.state_hash(state) not in self.Q:
             new_action = npr.rand() < 0.5
+          # Use model when it exists (not on first epoch)
+          else: 
+            new_action = self.optimal_action(state)
         # Update Q and a, then pick new action
         else: 
             self.update_Q(state)
             self.update_a()
             new_action = self.optimal_action(state)
-            # Explore (take non-optimal action) with probability epsilon
-            if npr.rand() < epsilon:
-                new_action = int(not new_action)
+
+        # Explore (take non-optimal action) with probability epsilon
+        if npr.rand() < epsilon:
+            new_action = int(not new_action)
 
         self.last_action = new_action
         self.last_state  = state
@@ -154,6 +161,7 @@ for ii in xrange(iters):
     # Reset the state of the learner.
     learner.reset()
 
+# Display plot of scores
 domain = np.arange(1, iters + 1, 1)
 plt.plot(domain, scores)
 plt.title("Scores over each Epoch (discount = " + str(learner.discount) + ")")

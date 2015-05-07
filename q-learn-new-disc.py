@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 class Learner:
 
-    def __init__(self):
+    def __init__(self, epsilon_factor = 10.0):
         self.last_state  = None
         self.last_action = None
         self.last_reward = None
@@ -17,6 +17,8 @@ class Learner:
 
         # discount used in Q-learning
         self.discount = 1.0
+
+        self.epsilon_factor = epsilon_factor
 
     def reset(self):
         self.last_state  = None
@@ -34,18 +36,6 @@ class Learner:
         bin_state[0] = (state['tree']['top'] - 200) // 25
 
         tree_dist = state['tree']['dist']
-        # if tree_dist < 0:
-        #     bin_state[1] = 0
-        # elif tree_dist < 50:
-        #     bin_state[1] = 1
-        # elif tree_dist < 100:
-        #     bin_state[1] = 2
-        # elif tree_dist < 200:
-        #     bin_state[1] = 3
-        # elif tree_dist < 300:
-        #     bin_state[1] = 4
-        # else:
-        #     bin_state[1] = 5
         if tree_dist < 0:
             bin_state[1] = 0
         elif tree_dist < 300:
@@ -54,12 +44,6 @@ class Learner:
             bin_state[1] = 5
 
         monkey_top = state['monkey']['top']
-        # if monkey_top <= 56:
-        #     bin_state[2] = 0
-        # elif not monkey_top >= 400:
-        #     bin_state[2] = monkey_top // 50
-        # else:
-        #      bin_state[2] = 8
         if monkey_top < 125:
             bin_state[2] = 0
         elif monkey_top < 350:
@@ -68,12 +52,6 @@ class Learner:
             bin_state[2] = 10
 
         monkey_vel = state['monkey']['vel']
-        # if monkey_vel < -25:
-        #     bin_state[3] = 0
-        # elif not monkey_vel >= 25:
-        #     bin_state[3] = ((monkey_vel + 25) // 10) + 1
-        # else:
-        #     bin_state[3] = 6
         if monkey_vel < 0:
             bin_state[3] = 0
         elif monkey_vel < 5:
@@ -85,7 +63,7 @@ class Learner:
 
     def state_hash(self, state):
         a, b, c, d = self.state_tupler(state)
-        return int(str(a*1000000)+str(b*10000)+str(c*100)+str(d))
+        return int((a*1000000)+(b*10000)+(c*100)+(d))
 
     def update_Q(self, new_state):
         s = self.state_hash(self.last_state)
@@ -126,20 +104,24 @@ class Learner:
         # monkey between 450 and -50
         # monkey vel between -50 and 40
 
-        epsilon = 1.0 / ((ii+1.0) * 10.0)
+        epsilon = 1.0 / ((ii+1.0) * self.epsilon_factor)
 
-        # First turn of game -> just pick a random action
+        # First turn of game -> pick a random action
         if self.last_action == None:
+          if ii == 0.0 or self.state_hash(state) not in self.Q:
             new_action = npr.rand() < 0.5
+          # Use model when it exists (not on first epoch)
+          else: 
+            new_action = self.optimal_action(state)
         # Update Q and a, then pick new action
         else: 
             self.update_Q(state)
             self.update_a()
             new_action = self.optimal_action(state)
-            # Explore (take non-optimal action) with probability epsilon
-            if npr.rand() < epsilon:
-                new_action = npr.rand() < 0.5
-                # new_action = int(not new_action)
+
+        # Explore (take non-optimal action) with probability epsilon
+        if npr.rand() < epsilon:
+            new_action = int(not new_action)
 
         self.last_action = new_action
         self.last_state  = state
@@ -175,6 +157,7 @@ for ii in xrange(iters):
 
 domain = np.arange(1, iters + 1, 1)
 plt.plot(domain, scores)
+plt.title("Scores over each Epoch (discount = " + str(learner.discount) + ")")
 plt.xlabel("Epoch")
 plt.ylabel("Score")
 plt.savefig("scores.png")
